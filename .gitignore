@@ -1,0 +1,33 @@
+# Excel 数据文件（包含敏感人员信息）
+*.xlsx
+*.xls
+
+# 图片目录（包含人员照片）
+images/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 日志和临时文件
+*.log
+*.tmp
