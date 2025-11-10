@@ -162,32 +162,64 @@ def insert_images_to_sheet(
         img.width = image_width_px
         img.height = total_height_px
 
-        # 计算在合并区域内的列偏移，让图片依次横向铺满
+        # ===== 步骤1：计算当前图片在合并区域内的列偏移位置 =====
+        # 目标：根据已放置图片的累计宽度（offset_px），确定当前图片应该从哪一列开始放置
+
+        # remaining_offset: 剩余的像素偏移量，初始值为已放置图片的总宽度
         remaining_offset = offset_px
+        # col_offset: 相对于起始列（col_idx）的列偏移量，初始为0表示从起始列开始
         col_offset = 0
+
+        # 逐列遍历合并区域的列宽，找到能容纳当前偏移量的目标列
+        # 例如：如果 offset_px=150px，列宽依次为 [80, 80, 80, 80]
+        #       第1列：150 >= 80，remaining_offset -= 80 → 70，col_offset=1
+        #       第2列：70 < 80，停止循环，图片将从第2列（偏移70px处）开始
         for width_px in column_widths_px:
             if remaining_offset < width_px:
+                # 当前列能够容纳剩余偏移量，找到了目标列
                 break
+            # 当前列宽度不足以容纳偏移量，继续向右查找下一列
             remaining_offset -= width_px
             col_offset += 1
+
+        # ===== 步骤2：边界保护 =====
+        # 防止偏移量超出合并区域的列范围（比如图片宽度分配不当导致越界）
         if col_offset >= len(column_widths_px):
+            # 如果计算出的列偏移超过了合并区域的列数，强制定位到最后一列
             col_offset = len(column_widths_px) - 1
+            # 将列内偏移设置为最后一列宽度减1（避免恰好在边界上），最小为0
             remaining_offset = max(column_widths_px[-1] - 1, 0)
 
+        # ===== 步骤3：设置图片锚点（定位信息） =====
+        # OneCellAnchor: 使用单元格锚点模式，图片左上角固定在指定单元格位置
         img.anchor = OneCellAnchor(
+            # _from: 定义图片左上角的锚点位置
             _from=AnchorMarker(
+                # col: 图片起始列的索引 = 基准列索引 + 计算出的列偏移
+                #      例如：col_idx=1（B列），col_offset=1，则图片从C列开始
                 col=col_idx + col_offset,
+                # colOff: 列内的精确像素偏移（需转换为 EMU 单位，1英寸=914400 EMU）
+                #         例如：remaining_offset=70px 表示从目标列左侧偏移70像素
                 colOff=pixels_to_EMU(remaining_offset),
+                # row: 图片起始行的索引（从目标单元格的行开始，无偏移）
                 row=row_idx,
+                # rowOff: 行内偏移为0，图片顶部对齐单元格顶部
                 rowOff=0,
             ),
+            # ext: 定义图片的实际尺寸（宽度和高度）
             ext=XDRPositiveSize2D(
+                # 图片宽度（像素转 EMU），由前面的宽度分配算法确定
                 pixels_to_EMU(image_width_px),
+                # 图片高度（像素转 EMU），等于合并区域的总高度
                 pixels_to_EMU(total_height_px),
             ),
         )
 
+        # ===== 步骤4：将图片添加到工作表并更新偏移量 =====
+        # 将配置好的图片对象添加到当前工作表
         ws.add_image(img)
+        # 更新累计偏移量，下一张图片将紧接着当前图片的右侧开始放置
+        # 例如：offset_px=0 → 放置图片1（宽100px）→ offset_px=100 → 放置图片2（宽100px）→ offset_px=200
         offset_px += image_width_px
 
 
