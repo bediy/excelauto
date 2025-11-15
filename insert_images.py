@@ -149,7 +149,12 @@ def insert_images_to_sheet(
         previous_right = right
 
     offset_px = 0
+    print(f"\n[调试] 合并区域总宽度: {total_width_px}px, 总高度: {total_height_px}px")
+    print(f"[调试] 各列宽度(像素): {column_widths_px}")
+    print(f"[调试] 将插入 {max_images} 张图片, 宽度分配: {width_allocations}")
+
     for idx, path in enumerate(image_paths[:max_images]):
+        print(f"\n--- 处理第 {idx+1} 张图片: {path.name} ---")
         image_width_px = width_allocations[idx]
         resized = resize_image(path, image_width_px, total_height_px)
         fmt = (path.suffix or ".png").replace(".", "").upper()
@@ -162,6 +167,8 @@ def insert_images_to_sheet(
         img.width = image_width_px
         img.height = total_height_px
 
+        print(f"[调试] 图片尺寸: 宽{image_width_px}px × 高{total_height_px}px")
+
         # ===== 步骤1：计算当前图片在合并区域内的列偏移位置 =====
         # 目标：根据已放置图片的累计宽度（offset_px），确定当前图片应该从哪一列开始放置
 
@@ -169,6 +176,8 @@ def insert_images_to_sheet(
         remaining_offset = offset_px
         # col_offset: 相对于起始列（col_idx）的列偏移量，初始为0表示从起始列开始
         col_offset = 0
+
+        print(f"[调试] 起始累计偏移量: {offset_px}px")
 
         # 逐列遍历合并区域的列宽，找到能容纳当前偏移量的目标列
         # 例如：如果 offset_px=150px，列宽依次为 [80, 80, 80, 80]
@@ -182,9 +191,12 @@ def insert_images_to_sheet(
             remaining_offset -= width_px
             col_offset += 1
 
+        print(f"[调试] 列偏移计算: col_offset={col_offset}, remaining_offset={remaining_offset}px")
+
         # ===== 步骤2：边界保护 =====
         # 防止偏移量超出合并区域的列范围（比如图片宽度分配不当导致越界）
         if col_offset >= len(column_widths_px):
+            print(f"[警告] 列偏移越界! 原col_offset={col_offset}, 修正为最后一列")
             # 如果计算出的列偏移超过了合并区域的列数，强制定位到最后一列
             col_offset = len(column_widths_px) - 1
             # 将列内偏移设置为最后一列宽度减1（避免恰好在边界上），最小为0
@@ -192,15 +204,21 @@ def insert_images_to_sheet(
 
         # ===== 步骤3：设置图片锚点（定位信息） =====
         # OneCellAnchor: 使用单元格锚点模式，图片左上角固定在指定单元格位置
+        anchor_col = col_idx + col_offset
+        anchor_col_off_emu = pixels_to_EMU(remaining_offset)
+
+        print(f"[调试] 锚点参数: 列索引={anchor_col} (基准{col_idx}+偏移{col_offset}), 列内偏移={remaining_offset}px ({anchor_col_off_emu} EMU)")
+        print(f"[调试] 锚点参数: 行索引={row_idx}, 行内偏移=0px")
+
         img.anchor = OneCellAnchor(
             # _from: 定义图片左上角的锚点位置
             _from=AnchorMarker(
                 # col: 图片起始列的索引 = 基准列索引 + 计算出的列偏移
                 #      例如：col_idx=1（B列），col_offset=1，则图片从C列开始
-                col=col_idx + col_offset,
+                col=anchor_col,
                 # colOff: 列内的精确像素偏移（需转换为 EMU 单位，1英寸=914400 EMU）
                 #         例如：remaining_offset=70px 表示从目标列左侧偏移70像素
-                colOff=pixels_to_EMU(remaining_offset),
+                colOff=anchor_col_off_emu,
                 # row: 图片起始行的索引（从目标单元格的行开始，无偏移）
                 row=row_idx,
                 # rowOff: 行内偏移为0，图片顶部对齐单元格顶部
@@ -221,6 +239,7 @@ def insert_images_to_sheet(
         # 更新累计偏移量，下一张图片将紧接着当前图片的右侧开始放置
         # 例如：offset_px=0 → 放置图片1（宽100px）→ offset_px=100 → 放置图片2（宽100px）→ offset_px=200
         offset_px += image_width_px
+        print(f"[调试] 图片已添加, 更新后的累计偏移量: {offset_px}px")
 
 
 def process_workbook(workbook_path: Path, images_dir: Path) -> None:
